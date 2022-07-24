@@ -1,45 +1,39 @@
-import logbot
-import json, os, config
-from flask import Flask, request
+import os
+from datetime import datetime
+
+from flask import Flask, abort, request
+
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 app = Flask(__name__)
 
-@app.route("/")
-def hello_trader():
-    return "<p>Hello young trader!</p>"
+line_bot_api = LineBotApi(os.environ.get("CHANNEL_ACCESS_TOKEN"))
+handler = WebhookHandler(os.environ.get("CHANNEL_SECRET"))
 
-@app.route("/tradingview-to-discord-study", methods=['POST'])
-def discord_study_tv():
 
-    logbot.logs("========== STUDY ==========")
-    
-    data = json.loads(request.data)
+@app.route("/", methods=["GET", "POST"])
+def callback():
 
-    webhook_passphrase = os.environ.get('WEBHOOK_PASSPHRASE', config.WEBHOOK_PASSPHRASE)
+    if request.method == "GET":
+        return "Hello Heroku"
+    if request.method == "POST":
+        signature = request.headers["X-Line-Signature"]
+        body = request.get_data(as_text=True)
 
-    if 'passphrase' not in data.keys():
-        logbot.logs(">>> /!\ No passphrase entered", True)
-        return {
-            "success": False,
-            "message": "no passphrase entered"
-        }
+        try:
+            handler.handle(body, signature)
+        except InvalidSignatureError:
+            abort(400)
 
-    if data['passphrase'] != webhook_passphrase:
-        logbot.logs(">>> /!\ Invalid passphrase", True)
-        return {
-            "success": False,
-            "message": "invalid passphrase"
-        }
-    del data["passphrase"]
+        return "OK"
 
-    try:
-        chart_url = data["chart_url"]
-        del data["chart_url"]
-    except KeyError:
-        logbot.logs(">>> /!\ Key 'chart_url' not found", True)
 
-    logbot.study_alert(json.dumps(data), chart_url)
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+    get_message = event.message.text
 
-    return {
-        "success": True
-    }
+    # Send To Line
+    reply = TextSendMessage(text=f"{get_message}")
+    line_bot_api.reply_message(event.reply_token, reply)

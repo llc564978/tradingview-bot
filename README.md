@@ -1,1 +1,1 @@
-Flask for tradingView Line Bot
+# Tradingview Bot
